@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<JUCERPROJECT name="BPM2Time" companyName="Leigh Pierce" version="1.0.0" userNotes="Converts Session BPM to ms"
+              projectType="audioplug" pluginManufacturer="Leigh Pierce" pluginFormats="buildAU"
+              useAppConfig="0" addUsingNamespaceToJuceHeader="1" id="i7r38z"
+              jucerFormatVersion="1">
+  <MAINGROUP id="Y6o5gj" name="BPM2Time">
+    <GROUP id="{66AB9B45-CBC2-D482-BBB0-4C0806FC5FDD}" name="Source">
+      <FILE id="yQ9o2U" name="PluginEditor.cpp" compile="1" resource="0"
+            file="Source/PluginEditor.cpp"/>
+      <FILE id="YYvb14" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+      <FILE id="ipeIjH" name="PluginProcessor.cpp" compile="1" resource="0"
+            file="Source/PluginProcessor.cpp"/>
+      <FILE id="YY2WtA" name="PluginProcessor.h" compile="0" resource="0"
+            file="Source/PluginProcessor.h"/>
+    </GROUP>
+  </MAINGROUP>
+  <MODULES>
+    <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_plugin_client" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors_headless" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
+    <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_extra" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+  </MODULES>
+  <EXPORTFORMATS>
+    <XCODE_MAC targetFolder="Builds/MacOSX">
+      <CONFIGURATIONS>
+        <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="BPM2Time-Test"
+                       osxArchitecture="arm64"/>
+        <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="BPM2Time"
+                       stripLocalSymbols="1" osxArchitecture="arm64" linkTimeOptimisation="1"
+                       enablePluginBinaryCopyStep="0" stripUnusedDylibs="1" customXcodeFlags="DEAD_CODE_STRIPPING=YES&#10;STRIP_INSTALLED_PRODUCT=YES&#10;STRIP_STYLE=all&#10;COPY_PHASE_STRIP=YES&#10;DEPLOYMENT_POSTPROCESSING=YES&#10;GCC_GENERATE_DEBUGGING_SYMBOLS=NO"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_audio_basics" path=""/>
+        <MODULEPATH id="juce_audio_plugin_client" path=""/>
+        <MODULEPATH id="juce_audio_processors" path=""/>
+        <MODULEPATH id="juce_core" path=""/>
+        <MODULEPATH id="juce_data_structures" path=""/>
+        <MODULEPATH id="juce_events" path=""/>
+        <MODULEPATH id="juce_graphics" path=""/>
+        <MODULEPATH id="juce_gui_basics" path=""/>
+        <MODULEPATH id="juce_gui_extra" path="../../../JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="../../../JUCE/modules"/>
+      </MODULEPATHS>
+    </XCODE_MAC>
+  </EXPORTFORMATS>
+  <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_VST3_CAN_REPLACE_VST2="0"
+               JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP="0" JUCE_DISPLAY_SPLASH_SCREEN="0"
+               JUCE_REPORT_APP_USAGE="0" JUCE_WEB_BROWSER="0" JUCE_USE_CURL="0"
+               JUCE_LOAD_CURL_SYMBOLS_LAZILY="0"/>
+</JUCERPROJECT>
