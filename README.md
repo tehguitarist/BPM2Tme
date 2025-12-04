@@ -131,7 +131,11 @@ If you encounter any issues or have feature requests, please [open an issue](htt
 
 ## Changelog
 
-### Version 1.0.0 (2024)
+### Version 1.1.0
+- Fixed font deprecation warnings
+- UI Now respects Sync option correctly
+
+### Version 1.0.0
 - Initial release
 - 8 note divisions (1/128 to 1/1)
 - Host tempo sync and manual BPM mode
