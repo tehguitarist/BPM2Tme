@@ -146,14 +146,22 @@ void PassthroughTempoProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             std::memmove (out, in, (size_t) numSamples * sizeof (float));
     }
 
-    // Only check BPM when transport is playing
+    // Only check BPM when sync is enabled and transport is playing
     bool shouldCheckBpm = false;
-    if (auto* ph = getPlayHead())
+    bool syncEnabled = false;
+    
+    if (auto* pb = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter ("syncBpm")))
+        syncEnabled = pb->get();
+    
+    if (syncEnabled)
     {
-        if (auto pos = ph->getPosition())
+        if (auto* ph = getPlayHead())
         {
-            if (pos->getIsPlaying())
-                shouldCheckBpm = true;
+            if (auto pos = ph->getPosition())
+            {
+                if (pos->getIsPlaying())
+                    shouldCheckBpm = true;
+            }
         }
     }
     
@@ -169,7 +177,7 @@ void PassthroughTempoProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     }
     else
     {
-        // Reset counter when stopped so we check immediately on play
+        // Reset counter when stopped or sync disabled so we check immediately when conditions are met
         samplesSinceLastBpmCheck = 0;
     }
 }
@@ -205,6 +213,27 @@ void PassthroughTempoProcessor::checkBpmFromHost()
                     prevBpmReported = *bpm;
                 }
             }
+            
+            prevIsPlaying = pos->getIsPlaying();
+        }
+    }
+}
+
+void PassthroughTempoProcessor::forceReadBpmFromHost()
+{
+    if (auto* ph = getPlayHead())
+    {
+        if (auto pos = ph->getPosition())
+        {
+            if (auto bpm = pos->getBpm())
+            {
+                cachedBpm = *bpm;
+                haveValidBpm = true;
+                prevBpmReported = *bpm;
+            }
+            
+            if (auto ppq = pos->getPpqPosition())
+                prevPpqPosition = *ppq;
             
             prevIsPlaying = pos->getIsPlaying();
         }

@@ -39,6 +39,7 @@ public:
     int getSelectedDenominator() const;
     bool hostProvidedBpm() const { return haveValidBpm; }
     void setDivisionIndexNotifyingHost (int choiceIndex);
+    void forceReadBpmFromHost();  // Force immediate BPM read from host
 
     juce::AudioProcessorValueTreeState apvts;
     double cachedBpm = 120.0;  // Made public so editor can read it

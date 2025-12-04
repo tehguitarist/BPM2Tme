@@ -26,6 +26,15 @@ PassthroughTempoEditor::PassthroughTempoEditor (PassthroughTempoProcessor& p)
                 btn->setToggleState (true, juce::dontSendNotification);
                 return;
             }
+            
+            // Force read BPM if sync is enabled
+            bool syncEnabled = false;
+            if (auto* pb = dynamic_cast<juce::AudioParameterBool*> (processorRef.apvts.getParameter ("syncBpm")))
+                syncEnabled = pb->get();
+            
+            if (syncEnabled)
+                processorRef.forceReadBpmFromHost();
+            
             processorRef.setDivisionIndexNotifyingHost (idx);
             updateUiFromParameters();
             updateMsLabel();
@@ -36,6 +45,13 @@ PassthroughTempoEditor::PassthroughTempoEditor (PassthroughTempoProcessor& p)
     syncToggle.setColour (juce::ToggleButton::textColourId, juce::Colours::white);
     syncToggle.setColour (juce::ToggleButton::tickColourId, juce::Colour (0xff4a90e2));
     syncToggle.setColour (juce::ToggleButton::tickDisabledColourId, juce::Colours::darkgrey);
+    
+    syncToggle.onClick = [this]()
+    {
+        // When sync is enabled, immediately read BPM from host
+        if (syncToggle.getToggleState())
+            processorRef.forceReadBpmFromHost();
+    };
     
     syncAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
         processorRef.apvts, "syncBpm", syncToggle);
@@ -57,21 +73,29 @@ PassthroughTempoEditor::PassthroughTempoEditor (PassthroughTempoProcessor& p)
     addAndMakeVisible (bpmLabel);
     bpmLabel.setText ("BPM", juce::dontSendNotification);
     bpmLabel.setJustificationType (juce::Justification::centredLeft);
-    bpmLabel.setFont (juce::Font (13.0f, juce::Font::bold));
+    bpmLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
     bpmLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
 
     addAndMakeVisible (msLabel);
     msLabel.setJustificationType (juce::Justification::centred);
-    msLabel.setFont (juce::Font (32.0f, juce::Font::bold));
+    msLabel.setFont (juce::FontOptions (32.0f, juce::Font::bold));
     msLabel.setColour (juce::Label::textColourId, juce::Colour (0xff4a90e2));
     msLabel.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1a1a1a));
 
     addAndMakeVisible (statusLabel);
     statusLabel.setJustificationType (juce::Justification::centred);
-    statusLabel.setFont (juce::Font (12.0f));
+    statusLabel.setFont (juce::FontOptions (12.0f));
     statusLabel.setColour (juce::Label::textColourId, juce::Colours::grey);
 
     setSize (680, 250);
+
+    // Force read BPM when plugin is opened if sync is enabled
+    bool syncEnabled = false;
+    if (auto* pb = dynamic_cast<juce::AudioParameterBool*> (processorRef.apvts.getParameter ("syncBpm")))
+        syncEnabled = pb->get();
+    
+    if (syncEnabled)
+        processorRef.forceReadBpmFromHost();
 
     updateUiFromParameters();
     startTimerHz (2);
@@ -95,14 +119,14 @@ void PassthroughTempoEditor::paint (juce::Graphics& g)
     g.fillRect (headerArea);
     
     g.setColour (juce::Colours::white);
-    g.setFont (juce::Font (18.0f, juce::Font::bold));
+    g.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     g.drawText ("BPM to Time", headerArea.reduced (15, 0), juce::Justification::centredLeft);
     
     g.setColour (juce::Colour (0xff3a3a3a));
     g.drawLine (0, 40, (float) getWidth(), 40, 1.0f);
     
     g.setColour (juce::Colours::lightgrey);
-    g.setFont (juce::Font (11.0f, juce::Font::bold));
+    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
     g.drawText ("NOTE DIVISION", 15, 50, 150, 20, juce::Justification::centredLeft);
 }
 
@@ -171,14 +195,24 @@ void PassthroughTempoEditor::updateUiFromParameters()
 
 void PassthroughTempoEditor::updateManualBpmFromHost()
 {
-    // Update the manual BPM slider to show host BPM (even when not syncing)
-    // but only update if the user isn't currently dragging it
-    if (processorRef.hostProvidedBpm() && ! manualBpmSlider.isMouseButtonDown())
+    // Get sync state
+    bool syncEnabled = false;
+    if (auto* pb = dynamic_cast<juce::AudioParameterBool*> (processorRef.apvts.getParameter ("syncBpm")))
+        syncEnabled = pb->get();
+    
+    // When sync is ON: Always update slider to show current host BPM
+    // When sync is OFF: Don't update slider automatically (user controls it)
+    if (syncEnabled && processorRef.hostProvidedBpm())
     {
         double hostBpm = processorRef.cachedBpm;
-        if (hostBpm > 0.0)
+        if (hostBpm > 0.0 && ! manualBpmSlider.isMouseButtonDown())
         {
+            // Update both the slider display AND the parameter value
             manualBpmSlider.setValue (hostBpm, juce::dontSendNotification);
+            
+            // Also update the actual parameter so it's in sync
+            if (auto* pf = processorRef.apvts.getParameter ("manualBpm"))
+                pf->setValueNotifyingHost (pf->convertTo0to1 ((float) hostBpm));
         }
     }
 }
@@ -200,10 +234,17 @@ void PassthroughTempoEditor::updateMsLabel()
     
     msLabel.setText (juce::String (noteMs, 2) + " ms", juce::dontSendNotification);
     
+    // Display the BPM that's actually being used for calculation
     juce::String statusText = juce::String (effectiveBpm, 1) + " BPM  •  1/" + juce::String (denom) + " note";
     
-    if (processorRef.hostProvidedBpm())
+    bool syncEnabled = false;
+    if (auto* pb = dynamic_cast<juce::AudioParameterBool*> (processorRef.apvts.getParameter ("syncBpm")))
+        syncEnabled = pb->get();
+    
+    if (syncEnabled && processorRef.hostProvidedBpm())
         statusText += "  •  Synced to host";
+    else if (syncEnabled)
+        statusText += "  •  Waiting for host BPM";
     else
         statusText += "  •  Manual BPM";
     
