@@ -38,11 +38,11 @@ jobs:
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build (macOS: AU + VST3)
+      - name: "Build (macOS: AU + VST3)"
         if: runner.os == 'macOS'
         run: cmake --build build --config Release --target BPM2Time_AU --target BPM2Time_VST3 --parallel
 
-      - name: Build (Windows/Linux: VST3)
+      - name: "Build (Windows/Linux: VST3)"
         if: runner.os != 'macOS'
         run: cmake --build build --config Release --target BPM2Time_VST3 --parallel
 
