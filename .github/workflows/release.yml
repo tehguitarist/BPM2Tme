@@ -1,0 +1,292 @@
+# Manual-trigger packaging: builds AU+VST3 on macOS and VST3 on Windows/Linux, packages a
+# per-platform installer (.pkg/.exe/.deb) alongside a raw zip, and publishes everything to a
+# GitHub Release. No push/schedule trigger — it ONLY runs when started from the Actions tab or
+# `gh workflow run release.yml`, so a release is never cut by accident.
+#
+# macOS signing/notarization uses the nine APPLE_* secrets (already configured in this repo) —
+# six for signing the AU/VST3 bundles, three more for signing the .pkg installer itself (a
+# separate "Developer ID Installer" cert). See .claude/rules/build.md for how each was obtained.
+#
+# The macOS .pkg installer is built from installer/macos/ and wraps the signed/notarized AU/VST3
+# bundles with a choice screen (both selected by default). The .pkg itself is also signed
+# (productsign) and notarized/stapled. The Windows .exe (NSIS) and Linux .deb are VST3-only since
+# neither platform has AU.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: "Create as a draft release (review before publishing)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Read version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: read
+        run: |
+          VERSION=$(grep -oP '(?<=project\(BPM2Time VERSION )[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: macOS build
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build AU + VST3
+        run: cmake --build build --config Release --target BPM2Time_AU --target BPM2Time_VST3 --parallel
+
+      - name: Validate AU (auval)
+        run: |
+          ok=0
+          for i in 1 2 3 4; do
+            if auval -v aufx I7r3 Manu; then ok=1; break; fi
+            echo "::warning::auval attempt $i failed; bouncing AudioComponentRegistrar and retrying"
+            killall -9 AudioComponentRegistrar 2>/dev/null || true
+            sleep 5
+          done
+          [ "$ok" = 1 ]
+
+      # --- Signing/notarization: requires the nine APPLE_* secrets (see build.md).
+      - name: Import signing certificates
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_INSTALLER_CERT_P12_BASE64: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+          APPLE_INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          INSTALLER_CERT_PATH="$RUNNER_TEMP/installer-cert.p12"
+
+          echo "$APPLE_CERT_P12_BASE64" | base64 --decode -o "$CERT_PATH"
+          echo "$APPLE_INSTALLER_CERT_P12_BASE64" | base64 --decode -o "$INSTALLER_CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security import "$INSTALLER_CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_INSTALLER_CERT_PASSWORD" -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+
+          rm -f "$CERT_PATH" "$INSTALLER_CERT_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign AU + VST3
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          for bundle in \
+            "build/BPM2Time_artefacts/Release/AU/BPM2Time.component" \
+            "build/BPM2Time_artefacts/Release/VST3/BPM2Time.vst3"; do
+            codesign --force --deep --options runtime --timestamp \
+              --sign "$APPLE_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" "$bundle"
+            codesign --verify --deep --strict --verbose=2 "$bundle"
+          done
+
+      - name: Notarize AU + VST3
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          NOTARIZE_ZIP="$RUNNER_TEMP/notarize.zip"
+          NOTARIZE_DIR="$RUNNER_TEMP/notarize"
+          mkdir -p "$NOTARIZE_DIR"
+          cp -R "build/BPM2Time_artefacts/Release/AU/BPM2Time.component" "$NOTARIZE_DIR/"
+          cp -R "build/BPM2Time_artefacts/Release/VST3/BPM2Time.vst3" "$NOTARIZE_DIR/"
+          ditto -c -k --keepParent "$NOTARIZE_DIR" "$NOTARIZE_ZIP"
+
+          xcrun notarytool submit "$NOTARIZE_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "build/BPM2Time_artefacts/Release/AU/BPM2Time.component"
+          xcrun stapler staple "build/BPM2Time_artefacts/Release/VST3/BPM2Time.vst3"
+
+      - name: Package zip
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          # Zip only the AU/VST3 bundles, not the whole Release dir (which also contains build
+          # byproducts). ditto -c can't take multiple sources directly, so stage them first
+          # (named "BPM2Time" so --keepParent gives the zip a clean top-level folder).
+          PKG_DIR="$RUNNER_TEMP/BPM2Time"
+          mkdir -p "$PKG_DIR"
+          cp -R "build/BPM2Time_artefacts/Release/AU" "build/BPM2Time_artefacts/Release/VST3" "$PKG_DIR/"
+          ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "BPM2Time-macOS-v${VERSION}.zip"
+
+      - name: Build installer
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          installer/macos/build_installer.sh "$VERSION" build/BPM2Time_artefacts/Release .
+
+      - name: Sign + notarize installer
+        env:
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          PKG="BPM2Time-macOS-v${VERSION}-Installer.pkg"
+          SIGNED_PKG="$RUNNER_TEMP/signed.pkg"
+
+          productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" \
+            "$PKG" "$SIGNED_PKG"
+          mv "$SIGNED_PKG" "$PKG"
+
+          xcrun notarytool submit "$PKG" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$PKG"
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN_PATH" || true
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: BPM2Time-macOS
+          path: |
+            BPM2Time-macOS-v*.zip
+            BPM2Time-macOS-v*.pkg
+
+  windows:
+    name: Windows build
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+
+      - name: Configure
+        run: cmake -B build
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target BPM2Time_VST3 --parallel
+
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $version = "${{ needs.version.outputs.version }}"
+          Compress-Archive -Path "build/BPM2Time_artefacts/Release/VST3/BPM2Time.vst3" `
+            -DestinationPath "BPM2Time-Windows-v$version.zip"
+
+      # makensis ships on windows-latest runners but is NOT on PATH — locate it rather than
+      # assume a bare `makensis` call works.
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = "${{ needs.version.outputs.version }}"
+
+          $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+          if ($makensis) {
+            $makensisPath = $makensis.Source
+          } else {
+            $candidates = @(
+              "$env:ProgramFiles\NSIS\makensis.exe",
+              "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+            )
+            $makensisPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+
+          if (-not $makensisPath) {
+            Write-Host "makensis not found on this runner — installing via Chocolatey"
+            choco install nsis -y --no-progress
+            $makensisPath = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          }
+
+          Write-Host "Using makensis at $makensisPath"
+          & $makensisPath /DVERSION=$version /DARTEFACTS_DIR="$PWD\build\BPM2Time_artefacts\Release\VST3" installer\windows\BPM2Time.nsi
+
+          # NSIS resolves a relative OutFile against the .nsi's own directory, not this process's
+          # CWD — move the built installer to the repo root so the upload-artifact glob finds it.
+          Move-Item "installer\windows\BPM2Time-Windows-v$version-Installer.exe" .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: BPM2Time-Windows
+          path: |
+            BPM2Time-Windows-v*.zip
+            BPM2Time-Windows-v*.exe
+
+  linux:
+    name: Linux build
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev \
+            libfreetype6-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.1-dev \
+            libglu1-mesa-dev mesa-common-dev
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target BPM2Time_VST3 --parallel
+
+      - name: Package zip
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          (cd build/BPM2Time_artefacts/Release/VST3 && \
+            zip -r "${GITHUB_WORKSPACE}/BPM2Time-Linux-v${VERSION}.zip" BPM2Time.vst3)
+
+      - name: Build installer
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          installer/linux/build_deb.sh "$VERSION" build/BPM2Time_artefacts/Release .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: BPM2Time-Linux
+          path: |
+            BPM2Time-Linux-v*.zip
+            BPM2Time-Linux-v*.deb
+
+  publish:
+    name: Publish release
+    needs: [version, macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with: { path: artifacts }
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: BPM2Time v${{ needs.version.outputs.version }}
+          draft: ${{ inputs.draft }}
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.pkg
+            artifacts/**/*.exe
+            artifacts/**/*.deb

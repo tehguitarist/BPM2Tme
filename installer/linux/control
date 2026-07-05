@@ -1,0 +1,9 @@
+Package: bpm2time
+Version: __VERSION__
+Section: sound
+Priority: optional
+Architecture: amd64
+Maintainer: Leigh Pierce <leighpierce@me.com>
+Description: BPM2Time plugin (VST3)
+ Converts your DAW's tempo into millisecond values for delay, reverb pre-delay,
+ and other time-based effect parameters.

@@ -1,2 +1,10 @@
 .DS_Store
 Builds/
+JuceLibraryCode/
+build/
+*.jucer
+*.user
+*.xcodeproj
+*.xcworkspace
+.idea/
+.vscode/

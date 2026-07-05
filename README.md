@@ -1,6 +1,8 @@
 # BPM2Time
 
-A lightweight Audio Unit plugin that converts your DAW's tempo into millisecond values for different note divisions. Perfect for quickly calculating delay times, reverb pre-delay, or any other time-based effect parameter.
+[![CI](https://github.com/tehguitarist/BPM2Tme/actions/workflows/ci.yml/badge.svg)](https://github.com/tehguitarist/BPM2Tme/actions/workflows/ci.yml)
+
+A lightweight Audio Unit / VST3 plugin that converts your DAW's tempo into millisecond values for different note divisions. Perfect for quickly calculating delay times, reverb pre-delay, or any other time-based effect parameter.
 
 ![Plugin Screenshot](screenshot.png)
 
@@ -23,55 +25,50 @@ A lightweight Audio Unit plugin that converts your DAW's tempo into millisecond 
 
 ## Installation
 
-### Pre-built Binary (macOS Apple Silicon)
+### Pre-built Binary
 
-1. Download the latest release from the [Releases page](https://github.com/tehguitarist/BPM2Time/releases)
-2. Extract the `.component` file
-3. Copy to `~/Library/Audio/Plug-Ins/Components/`
-4. Restart your DAW
+Download the latest release from the [Releases page](https://github.com/tehguitarist/BPM2Tme/releases). Each release includes, per platform:
+
+- **macOS**: a signed & notarized `.pkg` installer (choose AU, VST3, or both) and a raw `.zip` of the bundles. AU is Apple Silicon only.
+- **Windows**: a VST3 `.exe` installer and a raw `.zip`.
+- **Linux**: a VST3 `.deb` and a raw `.zip`.
+
+To install manually from the zip instead of the installer:
+- **macOS**: extract and copy `BPM2Time.component` to `~/Library/Audio/Plug-Ins/Components/`, or `BPM2Time.vst3` to `~/Library/Audio/Plug-Ins/VST3/`.
+- **Windows**: extract `BPM2Time.vst3` to `C:\Program Files\Common Files\VST3\`.
+- **Linux**: extract `BPM2Time.vst3` to `~/.vst3/` or `/usr/lib/vst3/`.
+
+Restart your DAW after installing.
 
 ### Building from Source
 
 #### Requirements
 
-- macOS 11.0 or later (Apple Silicon)
-- Xcode 13 or later
-- [JUCE Framework](https://juce.com/) 7.0+
-- Projucer (comes with JUCE)
+- [CMake](https://cmake.org/) 3.15+
+- A C++17 toolchain (Xcode command line tools on macOS, MSVC on Windows, GCC/Clang on Linux)
+- Git (for the JUCE submodule)
 
 #### Build Instructions
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/tehguitarist/BPM2Time.git
-   cd BPM2Time
-   ```
+```bash
+git clone --recurse-submodules https://github.com/tehguitarist/BPM2Tme.git
+cd BPM2Tme
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --target BPM2Time_AU      # macOS AU
+cmake --build build --config Release --target BPM2Time_VST3    # VST3, all platforms
+```
 
-2. Open `BPM2Time.jucer` in Projucer
+If you already cloned without `--recurse-submodules`, run `git submodule update --init --recursive` first.
 
-3. Click "Save and Open in IDE" to generate the Xcode project
-
-4. In Xcode, select the **Release** scheme:
-   - Click on the scheme dropdown (top toolbar)
-   - Select "BPM2Time" instead of "BPM2Time-Test"
-
-5. Build the project (⌘B)
-
-6. The plugin will be automatically installed to:
-   ```
-   ~/Library/Audio/Plug-Ins/Components/BPM2Time.component
-   ```
+`COPY_PLUGIN_AFTER_BUILD` is enabled, so a successful build installs directly to your user plugin
+folders (`~/Library/Audio/Plug-Ins/Components` and `.../VST3` on macOS). Bump the `VERSION` in
+`CMakeLists.txt` if Logic doesn't pick up a rebuilt AU — it caches AU components by version.
 
 #### Build Configuration
 
-The project is optimised for minimal binary size:
-- ARM64 architecture only
-- Link-time optimisation enabled
-- Debug symbols stripped
-- Dead code elimination
-- Minimal JUCE modules
-
-Final plugin size: ~2-3MB
+- macOS builds are Apple Silicon (arm64) only, minimum macOS 11.0
+- AU format is macOS-only; VST3 builds on macOS, Windows, and Linux
+- See [`.claude/rules/build.md`](.claude/rules/build.md) for the full CI/release pipeline (GitHub Actions), signing/notarization, and installer details
 
 ## Usage
 
@@ -97,13 +94,12 @@ Final plugin size: ~2-3MB
 
 ## Technical Details
 
-- **Format**: Audio Unit (AU)
-- **Architecture**: Apple Silicon (ARM64)
+- **Formats**: Audio Unit (AU, macOS only) and VST3 (macOS, Windows, Linux)
+- **macOS Architecture**: Apple Silicon (ARM64)
 - **Minimum OS**: macOS 11.0
 - **Audio Processing**: Zero-latency passthrough
 - **BPM Detection**: Reads from DAW transport (twice per second when playing)
-- **Framework**: JUCE 7.0+
-- **NOTE**: Other formats easily added by editing the .jucer file and compiling with your IDE of choice, though optimisations are somewhat linked to XCode.
+- **Framework**: JUCE 8.0.14 (via CMake, see [`.claude/rules/build.md`](.claude/rules/build.md))
 
 ## Contributing
 
@@ -127,7 +123,7 @@ This project is licensed under the GPL-3.0 Licence - see the [LICENSE](LICENSE) 
 
 ## Support
 
-If you encounter any issues or have feature requests, please [open an issue](https://github.com/tehguitarist/BPM2Time/issues) on GitHub.
+If you encounter any issues or have feature requests, please [open an issue](https://github.com/tehguitarist/BPM2Tme/issues) on GitHub.
 
 ## Changelog
 
