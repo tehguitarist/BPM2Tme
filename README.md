@@ -1,6 +1,6 @@
 # BPM2Time
 
-[![CI](https://github.com/tehguitarist/BPM2Tme/actions/workflows/ci.yml/badge.svg)](https://github.com/tehguitarist/BPM2Tme/actions/workflows/ci.yml)
+[![CI](https://github.com/tehguitarist/BPM2Time/actions/workflows/ci.yml/badge.svg)](https://github.com/tehguitarist/BPM2Time/actions/workflows/ci.yml)
 
 A lightweight Audio Unit / VST3 plugin that converts your DAW's tempo into millisecond values for different note divisions. Perfect for quickly calculating delay times, reverb pre-delay, or any other time-based effect parameter.
 
@@ -27,7 +27,7 @@ A lightweight Audio Unit / VST3 plugin that converts your DAW's tempo into milli
 
 ### Pre-built Binary
 
-Download the latest release from the [Releases page](https://github.com/tehguitarist/BPM2Tme/releases). Each release includes, per platform:
+Download the latest release from the [Releases page](https://github.com/tehguitarist/BPM2Time/releases). Each release includes, per platform:
 
 - **macOS**: a signed & notarized `.pkg` installer (choose AU, VST3, or both) and a raw `.zip` of the bundles. AU is Apple Silicon only.
 - **Windows**: a VST3 `.exe` installer and a raw `.zip`.
@@ -51,8 +51,8 @@ Restart your DAW after installing.
 #### Build Instructions
 
 ```bash
-git clone --recurse-submodules https://github.com/tehguitarist/BPM2Tme.git
-cd BPM2Tme
+git clone --recurse-submodules https://github.com/tehguitarist/BPM2Time.git
+cd BPM2Time
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --target BPM2Time_AU      # macOS AU
 cmake --build build --config Release --target BPM2Time_VST3    # VST3, all platforms
@@ -123,7 +123,7 @@ This project is licensed under the GPL-3.0 Licence - see the [LICENSE](LICENSE) 
 
 ## Support
 
-If you encounter any issues or have feature requests, please [open an issue](https://github.com/tehguitarist/BPM2Tme/issues) on GitHub.
+If you encounter any issues or have feature requests, please [open an issue](https://github.com/tehguitarist/BPM2Time/issues) on GitHub.
 
 ## Changelog
 
