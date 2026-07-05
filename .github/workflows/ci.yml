@@ -33,7 +33,7 @@ jobs:
             libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev \
             libfreetype6-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
             libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.1-dev \
-            libglu1-mesa-dev mesa-common-dev
+            libglu1-mesa-dev mesa-common-dev xvfb
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -77,5 +77,12 @@ jobs:
             Linux)   unzip -q pluginval.zip && PLUGINVAL="./pluginval" ;;
           esac
           chmod +x "$PLUGINVAL" 2>/dev/null || true
-          "$PLUGINVAL" --strictness-level 5 --validate build/BPM2Time_artefacts/Release/VST3/BPM2Time.vst3
+
+          # pluginval's editor tests open a real AudioProcessorEditor window, which segfaults on
+          # a headless Linux runner with no X server — run it under a virtual framebuffer there.
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run -a "$PLUGINVAL" --strictness-level 5 --validate build/BPM2Time_artefacts/Release/VST3/BPM2Time.vst3
+          else
+            "$PLUGINVAL" --strictness-level 5 --validate build/BPM2Time_artefacts/Release/VST3/BPM2Time.vst3
+          fi
         shell: bash
