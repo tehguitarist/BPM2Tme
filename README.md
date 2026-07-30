@@ -1,6 +1,8 @@
 # BPM2Time
 
-[![CI](https://github.com/tehguitarist/BPM2Time/actions/workflows/ci.yml/badge.svg)](https://github.com/tehguitarist/BPM2Time/actions/workflows/ci.yml)
+[![Build](https://github.com/tehguitarist/BPM2Time/actions/workflows/ci.yml/badge.svg)](https://github.com/tehguitarist/BPM2Time/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://opensource.org/license/agpl-v3)
+[![Downloads](https://img.shields.io/github/downloads/tehguitarist/BPM2Time/total)](https://somsubhra.github.io/github-release-stats/?username=tehguitarist&repository=BPM2Time&page=1&per_page=30)
 
 A lightweight Audio Unit / VST3 plugin that converts your DAW's tempo into millisecond values for different note divisions. Perfect for quickly calculating delay times, reverb pre-delay, or any other time-based effect parameter.
 
